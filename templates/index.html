@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geospatial Query Engine</title>
+    
+    <!-- Leaflet CSS & Plugins -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: #fff; color: #222; }
+        
+        .page-wrapper { display: grid; grid-template-columns: 1.2fr 1fr; gap: 0; min-height: 100vh; }
+        @media (max-width: 1024px) { .page-wrapper { grid-template-columns: 1fr; } }
+        
+        .sidebar { padding: 32px; background: #fff; overflow-y: auto; border-right: 1px solid #e5e7eb; }
+        .map-section { position: relative; background: #f5f5f5; }
+        
+        h1 { font-size: 26px; font-weight: 600; margin-bottom: 4px; color: #111; }
+        .subtitle { font-size: 14px; color: #666; margin-bottom: 28px; }
+        .badge { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 20px; margin-right: 6px; font-weight: 600; }
+        .badge-isro { background: #dbeafe; color: #1e40af; }
+        .badge-sw { background: #dcfce7; color: #166534; }
+
+        textarea {
+            width: 100%;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 14px;
+            min-height: 100px;
+            resize: vertical;
+            background: #fafafa;
+            line-height: 1.6;
+            font-family: inherit;
+        }
+        textarea:focus { 
+            outline: none; 
+            border-color: #3b82f6; 
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .examples { margin: 16px 0 20px; }
+        .examples p { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; }
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .chip {
+            font-size: 13px; padding: 6px 12px;
+            border: 1px solid #e5e7eb; 
+            border-radius: 20px;
+            cursor: pointer; 
+            color: #555; 
+            background: #fafafa;
+            transition: all 0.2s;
+        }
+        .chip:hover { 
+            border-color: #3b82f6; 
+            color: #3b82f6; 
+            background: #eff6ff;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff; 
+            border: none;
+            border-radius: 8px; 
+            padding: 8px 16px;
+            font-size: 13px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            margin-top: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+            display: inline-block;
+        }
+        button:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+        }
+        button:active { transform: translateY(0); }
+
+        .results { 
+            margin-top: 20px; 
+            max-height: 420px; 
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        .results::-webkit-scrollbar { width: 6px; }
+        .results::-webkit-scrollbar-track { background: transparent; }
+        .results::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+        .results::-webkit-scrollbar-thumb:hover { background: #999; }
+
+        .results-header { 
+            font-size: 13px; 
+            color: #555; 
+            margin-bottom: 12px; 
+            font-weight: 600;
+        }
+        
+        .result-item {
+            background: linear-gradient(135deg, #fafafa, #f5f5f5);
+            border: 1px solid #e5e7eb;
+            border-radius: 8px; 
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex; 
+            align-items: center; 
+            gap: 12px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .result-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+            background: linear-gradient(135deg, #fff, #f9fafb);
+        }
+
+        .token-text { 
+            font-weight: 700; 
+            min-width: 90px; 
+            color: #111;
+        }
+        .arrow { color: #aaa; }
+        .canonical { 
+            font-family: 'Monaco', 'Menlo', monospace; 
+            font-size: 12px; 
+            flex: 1; 
+            color: #555;
+            font-weight: 500;
+        }
+        .table-badge { 
+            font-size: 11px; 
+            padding: 3px 10px; 
+            border-radius: 12px; 
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .Country { background: #ede9fe; color: #5b21b6; }
+        .State   { background: #dcfce7; color: #166534; }
+        .City    { background: #fef3c7; color: #92400e; }
+        .coords { font-size: 11px; color: #888; margin-top: 2px; }
+
+        .no-match { 
+            text-align: center; 
+            padding: 24px; 
+            color: #888; 
+            font-size: 14px;
+            background: #fafafa;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        #map { 
+            width: 100%; 
+            height: 100%; 
+        }
+        
+        .how { 
+            margin-top: 32px; 
+            padding-top: 20px; 
+            border-top: 1px solid #e5e7eb;
+        }
+        .how h2 { 
+            font-size: 16px; 
+            font-weight: 600; 
+            margin-bottom: 12px;
+            color: #111;
+        }
+        .step-desc { 
+            font-size: 13px; 
+            color: #666; 
+            line-height: 1.8;
+        }
+        
+        .loading { 
+            text-align: center; 
+            color: #888; 
+            font-size: 13px; 
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .content-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: linear-gradient(135deg, #f0f9ff, #f5f3ff);
+            border-radius: 10px;
+            border: 1px solid #e0e7ff;
+        }
+        
+        .content-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111;
+            margin-bottom: 10px;
+        }
+        
+        .content-section p {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        
+        .content-section ul {
+            font-size: 12px;
+            color: #666;
+            margin-left: 18px;
+            line-height: 1.6;
+        }
+        
+        .map-header {
+            background: #fff;
+            padding: 14px 20px;
+            border-bottom: 2px solid #e5e7eb;
+            font-size: 16px;
+            font-weight: 600;
+            color: #111;
+        }
+    </style>
+</head>
+<body>
+<div class="page-wrapper">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h1>Geospatial Query Engine</h1>
+        <p class="subtitle">
+            <span class="badge badge-sw">SIH 1517</span>
+            Extract places from text
+        </p>
+
+        <textarea id="sentence" placeholder="Type a sentence...">Which of the following saw the highest average temperature in January, Maharashtra, Ahmedabad or entire New-Zealand?</textarea>
+
+        <div class="examples">
+            <p>Examples</p>
+            <div class="chips">
+                <span class="chip" onclick="setEx(this)">Show rainfall for Chennai</span>
+                <span class="chip" onclick="setEx(this)">Compare Indya and Austrla</span>
+                <span class="chip" onclick="setEx(this)">Cities in Rajasthan</span>
+            </div>
+        </div>
+
+        <button onclick="parse()">📍 Parse Places</button>
+        <div class="loading" id="loading" style="display: none;">Parsing...</div>
+        
+        <div class="results" id="results"></div>
+
+        <div class="content-section">
+            <h3>🌍 About This Engine</h3>
+            <p>Automatically extract geographic locations from natural language queries using AI-powered NLP and fuzzy matching.</p>
+            
+            <h3 style="margin-top: 12px;">📋 Supported Types</h3>
+            <ul>
+                <li><strong>Countries:</strong> 76 locations worldwide</li>
+                <li><strong>States:</strong> 37 Indian states & territories</li>
+                <li><strong>Cities:</strong> 150+ major cities globally</li>
+            </ul>
+        </div>
+
+        <div class="how">
+            <h2>How it works</h2>
+            <div class="step-desc">
+                ✓ Extracts place names using NLP<br>
+                ✓ Fuzzy matches to canonical database<br>
+                ✓ Shows locations on interactive map<br>
+                ✓ Handles spelling variations
+            </div>
+        </div>
+    </div>
+
+    <!-- Map -->
+    <div class="map-section">
+        <div class="map-header">🗺️ Map Visualization</div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<script>
+// Initialize map centered on world
+let map = L.map('map').setView([20, 10], 3);
+let markers = [];
+let bounds = null;
+
+// Use Google Maps Standard Tiles for high accuracy
+L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: '&copy; Google Maps'
+}).addTo(map);
+
+// Color scheme for different table types
+const colorMap = {
+    'Country': '#8B5CF6',
+    'State': '#16A34A',
+    'City': '#D97706'
+};
+
+async function parse() {
+    const sentence = document.getElementById("sentence").value.trim();
+    if (!sentence) return;
+    
+    document.getElementById("loading").style.display = "block";
+    clearMarkers();
+    
+    try {
+        const res = await fetch("/parse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sentence })
+        });
+        const data = await res.json();
+        document.getElementById("loading").style.display = "none";
+        
+        const container = document.getElementById("results");
+        if (!data.results.length) {
+            container.innerHTML = `<div class="no-match">No places found in query</div>`;
+            return;
+        }
+        
+        container.innerHTML = `<p class="results-header">📍 Found ${data.count} place${data.count > 1 ? "s" : ""}</p>` +
+            data.results.map(r => `
+                <div class="result-item">
+                    <span class="token-text">${r.token}</span>
+                    <span class="arrow">→</span>
+                    <div style="flex: 1;">
+                        <div class="canonical">${r.canonical_name}</div>
+                        <div class="coords">${r.latitude.toFixed(4)}°, ${r.longitude.toFixed(4)}°</div>
+                    </div>
+                    <span class="table-badge ${r.table}">${r.table}</span>
+                </div>
+            `).join("");
+        
+        // Add markers to map
+        addMarkersToMap(data.results);
+        
+    } catch (err) {
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("results").innerHTML = `<div class="no-match">Error: ${err.message}</div>`;
+    }
+}
+
+function addMarkersToMap(results) {
+    bounds = L.latLngBounds();
+    
+    results.forEach(result => {
+        const color = colorMap[result.table] || '#666';
+        const lat = result.latitude;
+        const lon = result.longitude;
+        
+        // Create colored marker
+        const markerIcon = L.divIcon({
+            html: `<div style="background: ${color}; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 3px solid white;">📍</div>`,
+            iconSize: [30, 30],
+            className: 'custom-marker'
+        });
+        
+        const marker = L.marker([lat, lon], { icon: markerIcon })
+            .bindPopup(`
+                <strong>${result.canonical_name}</strong><br>
+                <small>${result.table}</small><br>
+                <small>${lat.toFixed(4)}°, ${lon.toFixed(4)}°</small><br>
+                <small>Confidence: ${result.confidence}%</small>
+            `)
+            .addTo(map);
+        
+        markers.push(marker);
+        bounds.extend([lat, lon]);
+    });
+    
+    // Fit map to bounds with padding
+    if (results.length === 1) {
+        map.setView([results[0].latitude, results[0].longitude], 7);
+    } else {
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+}
+
+function clearMarkers() {
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+}
+
+function setEx(el) {
+    document.getElementById("sentence").value = el.textContent;
+    parse();
+}
+
+// Parse on page load
+window.addEventListener('load', () => {
+    setTimeout(() => parse(), 500);
+});
+</script>
+</body>
+</html>

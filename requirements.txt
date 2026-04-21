@@ -1,0 +1,4 @@
+flask
+rapidfuzz
+spacy
+numpy
